@@ -234,3 +234,174 @@
     user = null;
   });
   ```
+
+## 2.2 Jest 설치 및 환경설정
+
+### 2.2.1 jest 설치
+
+```jsx
+npm install --save-dev jest @types/jest ts-jest jest-environment-jsdom @testing-library/react @testing-library/dom @testing-library/jest-dom
+```
+
+### 2.2.2 Jest 환경설정
+
+```jsx
+// package.json
+"test": "jest --watchAll",
+...
+"jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "jest-environment-jsdom",
+    "testEnvironmentOptions": {
+      "url": "https://wanted.byeongjinkang.com"
+    }
+  },
+```
+
+## 2.3 jest 테스트 코드 작성을 위한 사전세팅
+
+- 컨벤션에 따라 다름. 각자의 장단점
+    1. 테스트 하는 컴포넌트와 가까이
+        1. 컴포넌트 응집도 향상
+        2. 컴포넌트 소스코드 파악에 유리함
+    2. `__test__` 디렉토리 생성
+        1. 테스트 코드끼리 뭉쳐서 관리함 
+
+```tsx
+ // given - 회원가입 페이지가 그려짐
+    const routes = [
+      {
+        path: "/signup",
+        element: <SignupPage />,
+      },
+    ];
+
+    const router = createMemoryRouter(routes, {
+      initialEntries: ["/signup"],
+      initialIndex: 0,
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    );
+```
+
+## 2.4 jest 실패케이스 작성
+
+```jsx
+// Signup.spec.tsx
+
+test("비밀번호와 비밀번호 확인 값이 일치하지 않으면 에러메세지가 표시된다", async () => {
+    // given - 회원가입 페이지가 그려짐
+    const routes = [
+      {
+        path: "/signup",
+        element: <SignupPage />,
+      },
+    ];
+
+    const router = createMemoryRouter(routes, {
+      initialEntries: ["/signup"],
+      initialIndex: 0,
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    );
+    // when - 비밀번호와 비밀번호 확인 값이 일치하지 않음
+
+    const passwordInput = screen.getByLabelText("비밀번호");
+    const confirmPasswordInput = screen.getByLabelText("비밀번호 확인");
+
+    fireEvent.change(passwordInput, { target: { value: "password" } });
+    fireEvent.change(confirmPasswordInput, {
+      target: { value: "wrongPassword" },
+    });
+
+    // then - 에러메세지가 표시됨
+    const errorMessage = await screen.findByTestId("error-message");
+    expect(errorMessage).toBeInTheDocument();
+  });
+```
+
+## 2.5 beforeEach()활용 및 jest 성공케이스 작성
+
+```jsx
+// Signup.spec.tsx
+
+import "@testing-library/jest-dom";
+import { fireEvent, render, screen } from "@testing-library/react";
+import SignupPage from "../pages/SignupPage";
+import { RouterProvider, createMemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+const queryClient = new QueryClient({
+  defaultOptions: {},
+});
+
+describe("회원가입 테스트", () => {
+  beforeEach(() => {
+    const routes = [
+      {
+        path: "/signup",
+        element: <SignupPage />,
+      },
+    ];
+
+    const router = createMemoryRouter(routes, {
+      initialEntries: ["/signup"],
+      initialIndex: 0,
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    );
+  });
+
+  test("비밀번호와 비밀번호 확인 값이 일치하지 않으면 에러메세지가 표시된다", async () => {
+    // given - 회원가입 페이지가 그려짐
+
+    // when - 비밀번호와 비밀번호 확인 값이 일치하지 않음
+
+    const passwordInput = screen.getByLabelText("비밀번호");
+    const confirmPasswordInput = screen.getByLabelText("비밀번호 확인");
+
+    fireEvent.change(passwordInput, { target: { value: "password" } });
+    fireEvent.change(confirmPasswordInput, {
+      target: { value: "wrongPassword" },
+    });
+
+    // then - 에러메세지가 표시됨
+    const errorMessage = await screen.findByTestId("error-message");
+    expect(errorMessage).toBeInTheDocument();
+  });
+
+  test("이메일을 입력하고, 비밀번호와 비밀번호 확인값이 일치하면 회원가입 버튼이 활성화된다", async () => {
+    // given - 회원가입 페이지가 그려짐
+    const signupButton = screen.getByRole("button", { name: "회원가입" });
+    expect(signupButton).toBeDisabled();
+
+    // when - 이메일 입력, 비밀번호, 비밀번호 확인 일치
+    const emailInput = screen.getByLabelText("이메일");
+    const passwordInput = screen.getByLabelText("비밀번호");
+    const confirmPasswordInput = screen.getByLabelText("비밀번호 확인");
+
+    fireEvent.change(emailInput, {
+      target: { value: "button-activated@email.com" },
+    });
+    fireEvent.change(passwordInput, { target: { value: "password" } });
+    fireEvent.change(confirmPasswordInput, {
+      target: { value: "password" },
+    });
+
+    // then - 회원가입 버튼 활성화
+    expect(signupButton).toBeEnabled();
+  });
+});
+```
