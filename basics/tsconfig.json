@@ -7,7 +7,7 @@
     "skipLibCheck": true,
     "baseUrl": "src",
     "allowSyntheticDefaultImports": true,
-    "types": ["cypress"],
+    "types": ["@testing-library/jest-dom"],
     "allowImportingTsExtensions": true,
 
 
