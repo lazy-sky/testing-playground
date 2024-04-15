@@ -405,3 +405,145 @@ describe("회원가입 테스트", () => {
   });
 });
 ```
+
+## 2.6 react-query 공식문서를 따라하면 안되는 이유
+
+### 2.6.1 react-query 테스트를 위한 패키지 설치
+
+```bash
+npm install --save-dev @testing-library/react-hooks react-test-renderer 
+```
+
+### 2.6.2 react-query 테스트 작성
+
+- 로그인 실패 케이스
+    
+    ```jsx
+    import "@testing-library/jest-dom";
+    
+    import { render, renderHook, waitFor } from "@testing-library/react";
+    
+    import { RouterProvider, createMemoryRouter } from "react-router-dom";
+    import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+    import LoginPage from "../pages/LoginPage";
+    
+    import useLogin from "../hooks/useLogin";
+    
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    });
+    
+    const testWrapper = ({ children }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    
+    describe("로그인 테스트", () => {
+      test("로그인 실패 시 에러메시지", async () => {
+        const routes = [
+          {
+            path: "/login",
+            element: <LoginPage />,
+          },
+        ];
+    
+        const router = createMemoryRouter(routes, {
+          initialEntries: ["/login"],
+          initialIndex: 0,
+        });
+    
+        render(
+          <QueryClientProvider client={queryClient}>
+            <RouterProvider router={router} />
+          </QueryClientProvider>
+        );
+    
+        const { result } = renderHook(() => useLogin(), {
+          wrapper,
+        });
+    
+        await waitFor(() => expect(result.current.isSuccess).toBe(false));
+      });
+    });
+    ```
+    
+- 테스트 케이스는 통과하지만 사실상 그렇지 않다
+    - given - when - then을 떠올려보자
+        
+        ```jsx
+        // given - 로그인 페이지가 그려짐
+        // when - 사용자가 로그인에 실패함
+        // then - 로그인 에러 메세지가 화면에 나타남
+        ```
+        
+        - 에러메세지가 보이지 않는다
+            
+            ```jsx
+            await waitFor(async () => {
+              expect(result.current.isSuccess).toBe(false);
+            	// 아래 항목 추가
+              const errorMessage = await screen.findByTestId("error-message");
+              expect(errorMessage).toBeInTheDocument();
+            });
+            ```
+            
+    - `isSuccess`가 `false`니까 실패한 건 맞는데 왜?
+        - HTTP request는 일어나지 않았고
+        - 그로 인해 `isSuccess`가 `false`일 뿐 실제로 테스트가 잘 이루어진 것은 아님
+    - 버튼 클릭을 테스트해보자
+        
+        ```jsx
+        const emailInput = screen.getByLabelText("이메일");
+        const passwordInput = screen.getByLabelText("비밀번호");
+        
+        fireEvent.change(emailInput, {
+          target: { value: "wrong@email.com" },
+        });
+        fireEvent.change(passwordInput, { target: { value: "wrongPassword" } });
+        const loginButton = screen.getByRole("button", { name: "로그인" });
+        fireEvent.click(loginButton);
+        ```
+        
+- 이제 테스트는 통과한다
+    - 테스트는 통과하는데 에러메세지 발생
+    - 테스트 환경에서는 `console.error()` 제거
+        
+        ```jsx
+        const queryClient = new QueryClient({
+          defaultOptions: {
+            queries: {
+              retry: false,
+            },
+          },
+          logger: {
+            log: console.log,
+            warn: console.warn,
+            // ✅ no more errors on the console for tests
+            error: process.env.NODE_ENV === "test" ? () => {} : console.error,
+          },
+        });
+        ```
+        
+    - 하지만 테스트코드에서 버튼을 클릭하는데, 실제 서버에 요청이 들어간다
+
+## 2.7 nock을 활용한 HTTP Request Mocking
+
+https://github.com/nock/nock
+
+- 제거한 에러메세지를 돌이켜보면 `AxiosError`
+    - 실제 서버에 리퀘스트가 넘어간다는 것
+- HTTP request를 mocking하기 위해 사용되는 패키지
+    - mocking은 가짜 데이터를 활용한다고 보면 됨
+    - 로그인 실패 요청을 mocking해보자
+        
+        ```jsx
+        nock("https://inflearn.byeongjinkang.com")
+          .post(`/user/login`, {
+            email: "wrong@email.com",
+            password: "wrongPassword",
+          })
+          .reply(400, { msg: "SUCH_USER_DOES_NOT_EXIST" });
+        ```
